@@ -1,0 +1,514 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+ЦерковноСлавянский Питон (ЦСП) - Транспилятор 
+"""
+
+import re
+import sys
+
+# === СЛОВАРЬ ЗАМЕН ===
+
+KEYWORD_MAP = {
+    'аще': 'if',
+    'иначе': 'else',
+    'аще_же': 'elif',
+    'по': 'for',
+    'дондеже': 'while',
+    'престани': 'break',
+    'продолжи': 'continue',
+    'молчи': 'pass',
+    'сотвори': 'def',
+    'воздаждь': 'return',
+    'чин': 'class',
+    'безимени': 'lambda',
+    'даждь': 'yield',
+    'внеси': 'import',
+    'яко': 'as',
+    'покусай': 'try',
+    'яко_аще': 'except',
+    'конечно': 'finally',
+    'воздвигни': 'raise',
+    'съ': 'with',
+    'истина': 'True',
+    'лжа': 'False',
+    'ничтоже': 'None',
+    'и': 'and',
+    'или': 'or',
+    'не': 'not',
+    'в': 'in',
+    'есть': 'is',
+    'вселенная': 'global',
+    'внелокальная': 'nonlocal',
+    'истреби': 'del',
+    'уверяй': 'assert',
+}
+
+BUILTIN_MAP = {
+    'возгласи': 'print',
+    'внемли': 'input',
+    'мери': 'len',
+    'предел': 'range',
+    'список': 'list',
+    'словник': 'dict',
+    'слово': 'str',
+    'число': 'int',
+    'дробь': 'float',
+    'истинник': 'bool',
+    'род': 'type',
+    'собери': 'sum',
+    'наибольший': 'max',
+    'наименший': 'min',
+    'устрой': 'sorted',
+    'преобразуй': 'map',
+    'просей': 'filter',
+    'сплети': 'zip',
+    'исчисли': 'enumerate',
+    'отверзи': 'open',
+    'беззнамение': 'abs',
+    'округли': 'round',
+    'возведи': 'pow',
+    'раздели_и_остаток': 'divmod',
+    'знамение': 'chr',
+    'порядок': 'ord',
+    'шестнадесятерично': 'hex',
+    'двоично': 'bin',
+    'осмерично': 'oct',
+    'представление': 'repr',
+    'образуй': 'format',
+    'свойства': 'vars',
+    'направления': 'dir',
+    'помощь': 'help',
+    'тождество': 'id',
+    'смеси': 'hash',
+    'зовомый': 'callable',
+    'есть_рода': 'isinstance',
+    'есть_подчин': 'issubclass',
+    'имать_свойство': 'hasattr',
+    'приими_свойство': 'getattr',
+    'положи_свойство': 'setattr',
+    'истреби_свойство': 'delattr',
+    'свойство': 'property',
+    'статичный_чин': 'staticmethod',
+    'чиновный_метод': 'classmethod',
+    'вышний': 'super',
+    'повторитель': 'iter',
+    'следующий': 'next',
+    'отсечение': 'slice',
+    'возвратный': 'reversed',
+    'вся': 'all',
+    'всяк': 'any',
+    'замороженное_множество': 'frozenset',
+    'множество': 'set',
+    'кортеж': 'tuple',
+    'байты': 'bytes',
+    'массив_байтов': 'bytearray',
+    'взор_памяти': 'memoryview',
+}
+
+METHOD_MAP = {
+    'приложи': 'append',
+    'простри': 'extend',
+    'всади': 'insert',
+    'отъими': 'remove',
+    'изми': 'pop',
+    'очисти': 'clear',
+    'покажи_место': 'index',
+    'обрати': 'reverse',
+    'спиши': 'copy',
+    'сочетай': 'join',
+    'раздели': 'split',
+    'очисти_края': 'strip',
+    'замени': 'replace',
+    'начинается': 'startswith',
+    'скончавается': 'endswith',
+    'возвели': 'upper',
+    'унизи': 'lower',
+    'возглави': 'title',
+    'начни_величием': 'capitalize',
+    'обрящи': 'find',
+    'счет': 'count',
+}
+
+DUNDER_MAP = {
+    '__сотвори__': '__init__',
+    '__слово__': '__str__',
+    '__представление__': '__repr__',
+    '__мери__': '__len__',
+    '__равно__': '__eq__',
+    '__сложи__': '__add__',
+    '__зови__': '__call__',
+    '__приими_по_месту__': '__getitem__',
+    '__положи_по_месту__': '__setitem__',
+    '__истреби_по_месту__': '__delitem__',
+    '__повторитель__': '__iter__',
+    '__следующий__': '__next__',
+    '__содержит__': '__contains__',
+}
+
+EXCEPTION_MAP = {
+    'ОшибкаЗначения': 'ValueError',
+    'ОшибкаТипа': 'TypeError',
+    'ОшибкаИмени': 'NameError',
+    'ОшибкаАтрибута': 'AttributeError',
+    'ОшибкаКлюча': 'KeyError',
+    'ОшибкаИндекса': 'IndexError',
+    'ОшибкаДеления': 'ZeroDivisionError',
+    'ОшибкаФайла': 'FileNotFoundError',
+    'ОшибкаВводаВывода': 'IOError',
+    'ОшибкаОС': 'OSError',
+    'ОшибкаИмпорта': 'ImportError',
+    'ОшибкаМодуля': 'ModuleNotFoundError',
+    'ОшибкаСинтаксиса': 'SyntaxError',
+    'ОшибкаВремениИсполнения': 'RuntimeError',
+    'ОшибкаРекурсии': 'RecursionError',
+    'ОшибкаПамяти': 'MemoryError',
+    'ОшибкаПереполнения': 'OverflowError',
+    'ОшибкаУтверждения': 'AssertionError',
+    'ОшибкаПрерывания': 'KeyboardInterrupt',
+    'ОшибкаСистемы': 'SystemExit',
+    'ОшибкаГенератора': 'GeneratorExit',
+    'ОшибкаСтопИтерации': 'StopIteration',
+    'ОшибкаАргумента': 'ArgumentError',
+    'ОшибкаПоиска': 'LookupError',
+    'ОшибкаКодировки': 'UnicodeError',
+    'ОшибкаДекодирования': 'UnicodeDecodeError',
+    'ОшибкаКодирования': 'UnicodeEncodeError',
+    'ОшибкаПеревода': 'UnicodeTranslateError',
+    'Предупреждение': 'Warning',
+    'ПредупреждениеУстаревания': 'DeprecationWarning',
+    'ПредупреждениеБудущего': 'FutureWarning',
+    'ПредупреждениеПользователя': 'UserWarning',
+}
+
+ALL_MAP = {}
+ALL_MAP.update(KEYWORD_MAP)
+ALL_MAP.update(BUILTIN_MAP)
+ALL_MAP.update(METHOD_MAP)
+ALL_MAP.update(DUNDER_MAP)
+ALL_MAP.update(EXCEPTION_MAP)
+
+ALL_KEYS = sorted(ALL_MAP.keys(), key=len, reverse=True)
+
+
+def transpile_csp(code):
+    result = []
+    i = 0
+    length = len(code)
+
+    while i < length:
+        char = code[i]
+
+        if char in ('"', "'"):
+            quote = char
+            string_literal = quote
+            i += 1
+
+            while i < length:
+                char = code[i]
+                string_literal += char
+
+                if char == '\\' and i + 1 < length:
+                    i += 1
+                    string_literal += code[i]
+                elif char == quote:
+                    i += 1
+                    break
+
+                i += 1
+
+            result.append(string_literal)
+            continue
+
+        if char == '#':
+            comment = ''
+            while i < length and code[i] != '\n':
+                comment += code[i]
+                i += 1
+            result.append(comment)
+            continue
+
+        if char == 'f' and i + 1 < length and code[i+1] in ('"', "'"):
+            quote = code[i+1]
+            string_literal = 'f' + quote
+            i += 2
+
+            while i < length:
+                char = code[i]
+                string_literal += char
+
+                if char == '\\' and i + 1 < length:
+                    i += 1
+                    string_literal += code[i]
+                elif char == quote:
+                    i += 1
+                    break
+                elif char == '{' and i + 1 < length and code[i+1] != '{':
+                    brace_count = 1
+                    i += 1
+                    expr = ''
+                    while i < length and brace_count > 0:
+                        char = code[i]
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                break
+                        expr += char
+                        i += 1
+
+                    transpiled_expr = transpile_csp(expr)
+                    string_literal += transpiled_expr + '}'
+                    i += 1
+                    continue
+
+                i += 1
+
+            result.append(string_literal)
+            continue
+
+        matched = False
+        for key in ALL_KEYS:
+            if code.startswith(key, i):
+                before_ok = i == 0 or not (code[i-1].isalnum() or code[i-1] == '_')
+                after_pos = i + len(key)
+                after_ok = after_pos >= length or not (code[after_pos].isalnum() or code[after_pos] == '_')
+
+                if before_ok and after_ok:
+                    result.append(ALL_MAP[key])
+                    i += len(key)
+                    matched = True
+                    break
+
+        if not matched:
+            result.append(char)
+            i += 1
+
+    return ''.join(result)
+
+
+# ============================================================
+# ЦЕРКОВНОСЛАВЯНСКИЕ ОШИБКИ
+# ============================================================
+
+# Каждый тип ошибки — своя степень церковного осуждения
+КНИГА_ГРЕХОВ = {
+    'NameError':           ('АНАФЕМА',             'Имя призвано дерзновенно, но не обретено в свитке имён'),
+    'SyntaxError':         ('ЕРЕСЬ',               'Богохульное нарушение священного синтаксиса'),
+    'IndentationError':    ('ЕРЕСЬ ОТСТУПНИЧЕСТВА','Отступление от праведного пути — в буквальном смысле'),
+    'TabError':            ('ЕРЕСЬ ОТСТУПНИЧЕСТВА','Смешение пробелов и табуляций — Вавилон малый'),
+    'TypeError':           ('СМЕШЕНИЕ',            'Дерзкое смешение несмешиваемых сущностей'),
+    'ZeroDivisionError':   ('БОГОХУЛЬСТВО',        'Деление на ничтоже — невозможно даже Господу'),
+    'IndexError':          ('ДЕРЗОСТЬ',            'Посягательство на несуществующее место в списке'),
+    'KeyError':            ('ПОТЕРЯ',              'Ключ не обретён в словнике — утрачен или не был'),
+    'AttributeError':      ('ОСЛУШАНИЕ',           'Свойство или метод не обнаружены у сущности'),
+    'ValueError':          ('НЕЧЕСТИЕ',            'Значение не принято — нечисто или неподобающе'),
+    'FileNotFoundError':   ('УТРАТА',              'Свиток не обретён на пути мирском'),
+    'PermissionError':     ('ЗАПРЕТ',              'Доступ возбранён — недостоин'),
+    'RecursionError':      ('ВЕЧНОЕ ПРОКЛЯТИЕ',    'Дух заблудился в бесконечном круге — рекурсия без конца'),
+    'ImportError':         ('ИЗГНАНИЕ',            'Модуль отверг призыв или не обретён'),
+    'ModuleNotFoundError': ('ИЗГНАНИЕ',            'Модуль не обретён нигде во вселенной'),
+    'OverflowError':       ('ПЕРЕПОЛНЕНИЕ ЧАШИ',   'Число превзошло всякие пределы мироздания'),
+    'MemoryError':         ('ОСКУДЕНИЕ',           'Память исчерпана — немощь железа'),
+    'RuntimeError':        ('СМЯТЕНИЕ',            'Ошибка во время исполнения таинства'),
+    'StopIteration':       ('КОНЕЦ СВИТКА',        'Повторитель достиг предела и остановился'),
+    'OSError':             ('МИРСКАЯ СКОРБЬ',      'Грех на уровне мирской системы'),
+    'UnicodeDecodeError':  ('ВАВИЛОНСКОЕ СМЕШЕНИЕ','Кодировка нарушена — языки смешались'),
+    'UnicodeEncodeError':  ('ВАВИЛОНСКОЕ СМЕШЕНИЕ','Кодировка нарушена — языки смешались'),
+    'AssertionError':      ('ЛОЖЕСВИДЕТЕЛЬСТВО',   'Утверждение оказалось ложью'),
+    'NotImplementedError': ('ПРАЗДНОСТЬ',          'Метод обещан, но не исполнен — лень духовная'),
+    'KeyboardInterrupt':   ('ПРЕРЫВАНИЕ СЛУЖБЫ',   'Служба прервана дерзкой рукой'),
+}
+
+def _перевести_сообщение(exc):
+    """Переводит стандартное Python-сообщение на церковнославянский лад."""
+    тип = type(exc).__name__
+    msg = str(exc)
+
+    if тип == 'NameError':
+        m = re.search(r"name '(.+?)' is not defined", msg)
+        if m:
+            return f"имя '{m.group(1)}' не обретено в свитке имён"
+        m = re.search(r"free variable '(.+?)' referenced before assignment", msg)
+        if m:
+            return f"свободная переменная '{m.group(1)}' призвана прежде присвоения"
+
+    elif тип in ('SyntaxError', 'IndentationError', 'TabError'):
+        return f"{exc.msg} (строка {exc.lineno})"
+
+    elif тип == 'TypeError':
+        if 'unsupported operand type' in msg:
+            m = re.search(r"unsupported operand type\(s\) for (.+?): '(.+?)' and '(.+?)'", msg)
+            if m:
+                return f"действие '{m.group(1)}' невозможно меж '{m.group(2)}' и '{m.group(3)}'"
+        if 'can only concatenate' in msg:
+            m = re.search(r"can only concatenate (\w+) \(not \"(.+?)\"\) to (\w+)", msg)
+            if m:
+                return f"нельзя соединить '{m.group(1)}' с '{m.group(2)}' — природы несовместимы"
+        if 'takes' in msg and 'argument' in msg:
+            m = re.search(r"(\w+\(\)) takes (\d+) positional argument", msg)
+            if m:
+                return f"сотворение '{m.group(1)}' требует {m.group(2)} подношений — не более и не менее"
+        if "'NoneType' object is not" in msg:
+            return "пытаешься использовать ничтоже (None) как нечто — тщетно"
+        if 'not callable' in msg:
+            m = re.search(r"'(.+?)' object is not callable", msg)
+            if m:
+                return f"'{m.group(1)}' не есть функция — призывать его нельзя"
+
+    elif тип == 'ZeroDivisionError':
+        return "деление на ничтоже — сие богопротивно"
+
+    elif тип == 'IndexError':
+        m = re.search(r"list index out of range", msg)
+        if m:
+            return "место в списке выходит за пределы его длины"
+        return msg
+
+    elif тип == 'KeyError':
+        return f"ключ {msg} не обретён в словнике"
+
+    elif тип == 'AttributeError':
+        m = re.search(r"'(.+?)' object has no attribute '(.+?)'", msg)
+        if m:
+            return f"сущность '{m.group(1)}' не имать свойства '{m.group(2)}'"
+
+    elif тип == 'FileNotFoundError':
+        m = re.search(r"\[Errno \d+\] .+?: '(.+?)'", msg)
+        if m:
+            return f"свиток '{m.group(1)}' не обретён на пути мирском"
+
+    elif тип == 'RecursionError':
+        return "дух заблудился в бесконечном круге — рекурсия без конца и края"
+
+    elif тип in ('ImportError', 'ModuleNotFoundError'):
+        m = re.search(r"No module named '(.+?)'", msg)
+        if m:
+            return f"модуль '{m.group(1)}' не обретён нигде во вселенной"
+
+    elif тип == 'ValueError':
+        if 'invalid literal for int' in msg:
+            m = re.search(r"invalid literal for int\(\) with base \d+: '(.+?)'", msg)
+            if m:
+                return f"'{m.group(1)}' не есть число — нечестивый ввод"
+        if 'could not convert string to float' in msg:
+            m = re.search(r"could not convert string to float: '(.+?)'", msg)
+            if m:
+                return f"'{m.group(1)}' не есть дробь — нечестивый ввод"
+
+    return msg  # если не опознали — оставляем как есть
+
+
+def _возгласить_ошибку(exc, csp_lines=None):
+    """Выводит ошибку в церковнославянском стиле."""
+    import traceback
+
+    тип = type(exc).__name__
+    осуждение, объяснение = КНИГА_ГРЕХОВ.get(тип, ('ПРЕГРЕШЕНИЕ', 'Неведомая ошибка постигла программу'))
+    перевод = _перевести_сообщение(exc)
+
+    print()
+    print("☩" * 30)
+    print(f"  ☠  {осуждение}  ☠")
+    print("☩" * 30)
+    print(f"  Природа греха : {объяснение}")
+    print(f"  Подробности   : {перевод}")
+
+    # Для синтаксических ошибок — линия из SyntaxError
+    if isinstance(exc, SyntaxError):
+        if exc.lineno:
+            print(f"  Строка греха  : {exc.lineno}")
+        if exc.text:
+            print(f"  Грешный текст : {exc.text.strip()}")
+            if exc.offset:
+                указатель = ' ' * (exc.offset - 1) + '☝'
+                print(f"                  {указатель}")
+        if csp_lines and exc.lineno and exc.lineno <= len(csp_lines):
+            оригинал = csp_lines[exc.lineno - 1].strip()
+            if оригинал:
+                print(f"  В оригинале   : {оригинал}")
+    else:
+        # Для рантайм-ошибок — берём последний фрейм трейсбека
+        tb = traceback.extract_tb(exc.__traceback__)
+        if tb:
+            последний = tb[-1]
+            print(f"  Строка греха  : {последний.lineno}")
+            if последний.line:
+                print(f"  Грешный текст : {последний.line.strip()}")
+            # Показываем оригинальную CSP-строку (номера совпадают 1:1)
+            if csp_lines and последний.lineno <= len(csp_lines):
+                оригинал = csp_lines[последний.lineno - 1].strip()
+                if оригинал and оригинал != последний.line.strip():
+                    print(f"  В оригинале   : {оригинал}")
+
+    print("☩" * 30)
+    print("  Да покается грешник и исправит деяния свои.")
+    print("☩" * 30)
+    print()
+
+
+# ============================================================
+# ЗАПУСК
+# ============================================================
+
+def run_csp(code, filename='<цсп>'):
+    python_code = transpile_csp(code)
+    csp_lines = code.splitlines()
+
+    print("=" * 60)
+    print("🕯 ИСХОДНЫЙ КОД (ЦСП):")
+    print("=" * 60)
+    print(code)
+    print()
+    print("=" * 60)
+    print("🐍 ТРАНСПИЛИРОВАННЫЙ КОД (Python):")
+    print("=" * 60)
+    print(python_code)
+    print()
+    print("=" * 60)
+    print("⚡ РЕЗУЛЬТАТ ВЫПОЛНЕНИЯ:")
+    print("=" * 60)
+
+    # Сначала компилируем — ловим SyntaxError до запуска
+    try:
+        скомпилировано = compile(python_code, filename, 'exec')
+    except SyntaxError as e:
+        _возгласить_ошибку(e, csp_lines)
+        return python_code
+
+    # Запускаем
+    try:
+        exec(скомпилировано, {'__name__': '__main__'})
+    except KeyboardInterrupt:
+        print()
+        print("  ☩ Служба прервана. Мир твоей душе. ☩")
+        print()
+    except Exception as e:
+        _возгласить_ошибку(e, csp_lines)
+
+    return python_code
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print("🕯 ЦерковноСлавянский Питон (ЦСП) v3.3")
+        print("Использование: python csp.py файл.цсп")
+        print()
+        print("Доступные ключевые слова:")
+        print("  аще/иначе/аще_же  - if/else/elif")
+        print("  по                - for")
+        print("  дондеже           - while")
+        print("  сотвори           - def")
+        print("  воздаждь          - return")
+        print("  чин               - class")
+        print("  возгласи          - print")
+        print("  число             - int")
+        print("  и т.д.")
+        sys.exit(1)
+
+    filename = sys.argv[1]
+    with open(filename, 'r', encoding='utf-8') as f:
+        code = f.read()
+
+    run_csp(code, filename)
